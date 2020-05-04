@@ -1,0 +1,10 @@
+{
+  "host": "47.104.128.137",
+  "port": 5675,
+  "virtualHost": "/claf/wybank",
+  "user": "superadmin",
+  "pwd": "123456",
+  "queueName": "cj.netos.ec.wybank1",
+  "routingKey": "wybank1",
+  "exchanges": ["wybank1.amq.direct"]
+}
