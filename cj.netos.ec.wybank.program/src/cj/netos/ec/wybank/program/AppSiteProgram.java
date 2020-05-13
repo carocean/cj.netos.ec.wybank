@@ -1,7 +1,8 @@
 package cj.netos.ec.wybank.program;
 
-import cj.netos.ec.wybank.services.DefaultConsumer;
 import cj.netos.rabbitmq.IRabbitMQConsumer;
+import cj.netos.rabbitmq.RabbitMQException;
+import cj.netos.rabbitmq.consumer.DeliveryCommandConsumer;
 import cj.studio.ecm.annotation.CjService;
 import cj.studio.ecm.net.CircuitException;
 import cj.studio.gateway.socket.Destination;
@@ -14,7 +15,11 @@ public class AppSiteProgram extends GatewayAppSiteProgram {
     @Override
     protected void onstart(Destination dest, String assembliesHome, ProgramAdapterType type) throws CircuitException {
         IRabbitMQConsumer rabbitMQ = (IRabbitMQConsumer) site.getService("rabbitMQConsumer");
-        rabbitMQ.open(assembliesHome);
-        rabbitMQ.acceptConsumer(new DefaultConsumer());
+        try {
+            rabbitMQ.open(assembliesHome);
+            rabbitMQ.acceptConsumer(new DeliveryCommandConsumer(site));
+        } catch (RabbitMQException e) {
+            throw new CircuitException(e.getStatus(), e.getMessage());
+        }
     }
 }

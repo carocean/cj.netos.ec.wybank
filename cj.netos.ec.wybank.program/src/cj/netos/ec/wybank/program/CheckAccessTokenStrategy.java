@@ -31,6 +31,7 @@ public class CheckAccessTokenStrategy implements ICheckAccessTokenStrategy {
         appSecret = site.getProperty("appSecret");
         portsAuth = site.getProperty("ports.auth");
         client = new OkHttpClient();
+        site.addService("@.http",client);
     }
 
     @Override
