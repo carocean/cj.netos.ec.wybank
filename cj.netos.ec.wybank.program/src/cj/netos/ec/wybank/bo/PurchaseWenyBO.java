@@ -1,14 +1,12 @@
 package cj.netos.ec.wybank.bo;
 
+import cj.netos.ec.wybank.model.PurchaseRecord;
+
 public class PurchaseWenyBO {
     String purchaser;
     String purchaserName;
-    String currency;
-    long amount;
     String wenyBankID;
-    String device;
-    String note;
-
+    PurchaseRecord record;
     public String getPurchaserName() {
         return purchaserName;
     }
@@ -17,21 +15,6 @@ public class PurchaseWenyBO {
         this.purchaserName = purchaserName;
     }
 
-    public String getDevice() {
-        return device;
-    }
-
-    public void setDevice(String device) {
-        this.device = device;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
 
     public String getPurchaser() {
         return purchaser;
@@ -41,13 +24,6 @@ public class PurchaseWenyBO {
         this.purchaser = purchaser;
     }
 
-    public long getAmount() {
-        return amount;
-    }
-
-    public void setAmount(long amount) {
-        this.amount = amount;
-    }
 
     public String getWenyBankID() {
         return wenyBankID;
@@ -57,12 +33,11 @@ public class PurchaseWenyBO {
         this.wenyBankID = wenyBankID;
     }
 
-
-    public String getNote() {
-        return note;
+    public PurchaseRecord getRecord() {
+        return record;
     }
 
-    public void setNote(String note) {
-        this.note = note;
+    public void setRecord(PurchaseRecord record) {
+        this.record = record;
     }
 }

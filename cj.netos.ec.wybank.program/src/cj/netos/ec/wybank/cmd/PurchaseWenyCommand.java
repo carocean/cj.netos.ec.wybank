@@ -2,6 +2,7 @@ package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
 import cj.netos.ec.wybank.bo.PurchaseWenyBO;
+import cj.netos.ec.wybank.model.PurchaseRecord;
 import cj.netos.rabbitmq.RabbitMQException;
 import cj.netos.rabbitmq.RetryCommandException;
 import cj.netos.rabbitmq.consumer.IConsumerCommand;
@@ -24,7 +25,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-@CjService(name = "/wenybank.ports#purchase")
+@CjService(name = "/wybank.ports#purchase")
 public class PurchaseWenyCommand implements IConsumerCommand {
     @CjServiceSite
     IServiceSite site;
@@ -68,25 +69,21 @@ public class PurchaseWenyCommand implements IConsumerCommand {
         String appid = site.getProperty("appid");
         String appKey = site.getProperty("appKey");
         String appSecret = site.getProperty("appSecret");
-        String portsurl = site.getProperty("ports.oc.wenybank");
+        String portsurl = site.getProperty("ports.oc.trade");
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
-        LongString noteLS = (LongString) properties.getHeaders().get("note");
-        LongString personLS = (LongString) properties.getHeaders().get("person");
-        LongString nickNameLS = (LongString) properties.getHeaders().get("nickName");
-        LongString deviceLS = (LongString) properties.getHeaders().get("device");
-        long amountLS = (long) properties.getHeaders().get("amount");
+        LongString purchaserLS = (LongString) properties.getHeaders().get("purchaser");
+        LongString purchaserNameLS = (LongString) properties.getHeaders().get("purchaserName");
+//        LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
 
         String nonce = Encript.md5(String.format("%s%s", UUID.randomUUID().toString(), System.currentTimeMillis()));
         String sign = Encript.md5(String.format("%s%s%s", appKey, nonce, appSecret));
 
         PurchaseWenyBO purchaseWenyBO = new PurchaseWenyBO();
-        purchaseWenyBO.setAmount(amountLS);
-        purchaseWenyBO.setCurrency("WENY");
-        purchaseWenyBO.setNote(noteLS.toString());
         purchaseWenyBO.setWenyBankID(wenyBankIDLS.toString());
-        purchaseWenyBO.setPurchaser(personLS.toString());
-        purchaseWenyBO.setPurchaserName(nickNameLS.toString());
-        purchaseWenyBO.setDevice(deviceLS.toString());
+        purchaseWenyBO.setPurchaser(purchaserLS.toString());
+        purchaseWenyBO.setPurchaserName(purchaserNameLS.toString());
+        purchaseWenyBO.setRecord(new Gson().fromJson(new String(body), PurchaseRecord.class));
+
         Map mapArgs = new HashMap();
         mapArgs.put("purchaseBill", purchaseWenyBO);
         RequestBody requestBody = RequestBody.create(new Gson().toJson(mapArgs).getBytes());
