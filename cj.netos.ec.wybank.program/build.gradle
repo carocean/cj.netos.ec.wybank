@@ -24,21 +24,20 @@ dependencies {
     // https://mvnrepository.com/artifact/com.rabbitmq/amqp-client
     compile group: 'com.rabbitmq', name: 'amqp-client', version: '5.9.0'
 
-    compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq.ultimate', version: ref_cj_netos_rabbitmq_ultimate_version
-    compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq.consumer', version: ref_cj_netos_rabbitmq_consumer_version
+    compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq', version: ref_cj_netos_rabbitmq_version
 
     compile group: 'org.apache.curator', name: 'curator-framework', version: '4.3.0'
     compile group: 'org.apache.curator', name: 'curator-recipes', version: '4.3.0'
 }
 task copyRefembeds(type: Copy) {
     from configurations.compileClasspath.files {
-        include 'cj.netos.rabbitmq.consumer-*.jar','cj.studio.orm.curator-*.jar'
+        include '','cj.studio.orm.curator-*.jar'
     }
     into 'src/cj/refembeds'
 }
 task copyReferences(type: Copy) {
     from configurations.compileClasspath.files {
-        include 'cj.netos.gateway.wybank.openports-*.jar',  'cj.studio.openport-*.jar','okhttp-*.jar','amqp-client-*.jar','cj.netos.rabbitmq.ultimate-*.jar','curator-*.jar',
+        include 'cj.netos.gateway.wybank.openports-*.jar',  'cj.studio.openport-*.jar','okhttp-*.jar','amqp-client-*.jar','cj.netos.rabbitmq-*.jar','curator-*.jar',
                 'zookeeper-*.jar','jsr305-.*.jar','error_prone_*.jar','failureaccess-*.jar','guava-*.jar','listenablefuture*.jar','j2objc-*.jar'
     }
     into 'src/cj/references'

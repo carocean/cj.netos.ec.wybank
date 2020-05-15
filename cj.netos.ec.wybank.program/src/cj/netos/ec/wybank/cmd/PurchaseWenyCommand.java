@@ -1,8 +1,11 @@
 package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
+import cj.netos.ec.wybank.bo.PurchaseResponse;
 import cj.netos.ec.wybank.bo.PurchaseWenyBO;
 import cj.netos.ec.wybank.model.PurchaseRecord;
+import cj.netos.rabbitmq.CjConsumer;
+import cj.netos.rabbitmq.IRabbitMQProducer;
 import cj.netos.rabbitmq.RabbitMQException;
 import cj.netos.rabbitmq.RetryCommandException;
 import cj.netos.rabbitmq.consumer.IConsumerCommand;
@@ -25,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+@CjConsumer(name = "trade")
 @CjService(name = "/wybank.ports#purchase")
 public class PurchaseWenyCommand implements IConsumerCommand {
     @CjServiceSite
@@ -35,6 +39,9 @@ public class PurchaseWenyCommand implements IConsumerCommand {
 
     @CjServiceRef
     ICuratorPathChecker curatorPathChecker;
+
+    @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
+    IRabbitMQProducer rabbitMQProducer;
 
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
@@ -49,7 +56,9 @@ public class PurchaseWenyCommand implements IConsumerCommand {
         InterProcessMutex mutex = lock.writeLock();
         try {
             mutex.acquire();
-            _doCmd(properties, body);
+            PurchaseResponse response = _doCmd(properties, body);
+            //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
+            _sendAck(response);
         } catch (RabbitMQException e) {
             throw e;
         } catch (Exception e) {
@@ -63,7 +72,11 @@ public class PurchaseWenyCommand implements IConsumerCommand {
         }
     }
 
-    private void _doCmd(AMQP.BasicProperties properties, byte[] body) throws RabbitMQException {
+    private void _sendAck(PurchaseResponse response) {
+//        rabbitMQProducer.publish();
+    }
+
+    private PurchaseResponse _doCmd(AMQP.BasicProperties properties, byte[] body) throws RabbitMQException {
         OkHttpClient client = (OkHttpClient) site.getService("@.http");
 
         String appid = site.getProperty("appid");
@@ -117,6 +130,6 @@ public class PurchaseWenyCommand implements IConsumerCommand {
             throw new RabbitMQException(map.get("status") + "", map.get("message") + "");
         }
         json = (String) map.get("dataText");
-        map = new Gson().fromJson(json, HashMap.class);
+        return new Gson().fromJson(json, PurchaseResponse.class);
     }
 }

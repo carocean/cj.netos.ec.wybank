@@ -45,7 +45,7 @@
 	serviceContainer : {
 		name : "netContainer",
 		switchFilter:"off",
-		monitor: "",
+		monitor: "cj.netos.rabbitmq.DefaultRabbitMQMonitor",
 		jss:[{
 			module:"services1",
 			package:"cj.netos.ec.wybank.jss",

@@ -18,8 +18,7 @@ sourceSets {
 
 dependencies {
     compile group: 'cj.netos.openport', name: 'cj.studio.openport', version: ref_cj_studio_openport_version
-    compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq.ultimate', version: ref_cj_netos_rabbitmq_ultimate_version
-    compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq.consumer', version: ref_cj_netos_rabbitmq_consumer_version
+    compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq', version: ref_cj_netos_rabbitmq_version
 }
 
  task releaseToProgram(type: Copy) {

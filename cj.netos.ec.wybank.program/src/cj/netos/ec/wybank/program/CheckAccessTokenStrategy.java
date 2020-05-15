@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 public class CheckAccessTokenStrategy implements ICheckAccessTokenStrategy {
     String portsAuth;
@@ -30,7 +31,7 @@ public class CheckAccessTokenStrategy implements ICheckAccessTokenStrategy {
         appKey = site.getProperty("appKey");
         appSecret = site.getProperty("appSecret");
         portsAuth = site.getProperty("ports.auth");
-        client = new OkHttpClient();
+        client = new OkHttpClient().newBuilder().readTimeout(60, TimeUnit.SECONDS).build();
         site.addService("@.http",client);
     }
 
