@@ -6,8 +6,35 @@ import cj.netos.ec.wybank.model.PurchaseRecord;
 public class PurchaseResponse {
     String purchaser;
     String purchaserName;
+    String recordSN;
     String wenyBankID;
+    String state;
+    String message;
     PurchaseRecord record;
+
+    public String getRecordSN() {
+        return recordSN;
+    }
+
+    public void setRecordSN(String recordSN) {
+        this.recordSN = recordSN;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public void setState(String state) {
+        this.state = state;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
 
     public String getPurchaser() {
         return purchaser;

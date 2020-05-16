@@ -13,6 +13,7 @@ import cj.studio.ecm.IServiceSite;
 import cj.studio.ecm.annotation.CjService;
 import cj.studio.ecm.annotation.CjServiceRef;
 import cj.studio.ecm.annotation.CjServiceSite;
+import cj.studio.ecm.net.CircuitException;
 import cj.studio.openport.util.Encript;
 import cj.ultimate.gson2.com.google.gson.Gson;
 import com.rabbitmq.client.AMQP;
@@ -43,6 +44,9 @@ public class PurchaseWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
+    @CjServiceRef(refByName = "@.rabbitmq.producer.report")
+    IRabbitMQProducer reportRabbitMQProducer;
+
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
@@ -52,16 +56,39 @@ public class PurchaseWenyCommand implements IConsumerCommand {
         } catch (Exception e) {
             throw new RabbitMQException("500", e);
         }
+        LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
         InterProcessReadWriteLock lock = new InterProcessReadWriteLock(framework, path);
         InterProcessMutex mutex = lock.writeLock();
         try {
             mutex.acquire();
             PurchaseResponse response = _doCmd(properties, body);
+            response.setMessage("ok");
+            response.setState("200");
+            response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
+            _report(response);
         } catch (RabbitMQException e) {
+            PurchaseResponse response = new PurchaseResponse();
+            response.setState("500");
+            response.setMessage(e.getMessage());
+            response.setRecordSN(record_snLS.toString());
+            try {
+                _sendAck(response);
+            } catch (CircuitException ex) {
+                throw new RabbitMQException(ex.getStatus(), ex.getMessage());
+            }
             throw e;
         } catch (Exception e) {
+            PurchaseResponse response = new PurchaseResponse();
+            response.setState("500");
+            response.setMessage(e.getMessage());
+            response.setRecordSN(record_snLS.toString());
+            try {
+                _sendAck(response);
+            } catch (CircuitException ex) {
+                throw new RabbitMQException(ex.getStatus(), ex.getMessage());
+            }
             throw new RabbitMQException("500", e);
         } finally {
             try {
@@ -72,8 +99,50 @@ public class PurchaseWenyCommand implements IConsumerCommand {
         }
     }
 
-    private void _sendAck(PurchaseResponse response) {
-//        rabbitMQProducer.publish();
+    private void _report(PurchaseResponse response) throws CircuitException {
+        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
+                .type("/report.ports")
+                .headers(new HashMap() {
+                    {
+                        put("state", response.getState());
+                        put("message", response.getMessage());
+                        put("command", "purchase");
+                        put("purchaser", response.getPurchaser());
+                        put("purchaserName", response.getPurchaserName());
+                        put("wenyBankID", response.getWenyBankID());
+                        put("record_sn", response.getRecordSN());
+                    }
+                }).build();
+        byte[] body = null;
+        if (!"200".equals(response.getState())) {
+            body = new byte[0];
+        } else {
+            body = new Gson().toJson(response.getRecord()).getBytes();
+        }
+        reportRabbitMQProducer.publish(properties, body);
+    }
+
+    private void _sendAck(PurchaseResponse response) throws CircuitException {
+        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
+                .type("/wybank.ports")
+                .headers(new HashMap() {
+                    {
+                        put("state", response.getState());
+                        put("message", response.getMessage());
+                        put("command", "ackPurchase");
+                        put("purchaser", response.getPurchaser());
+                        put("purchaserName", response.getPurchaserName());
+                        put("wenyBankID", response.getWenyBankID());
+                        put("record_sn", response.getRecordSN());
+                    }
+                }).build();
+        byte[] body = null;
+        if (!"200".equals(response.getState())) {
+            body = new byte[0];
+        } else {
+            body = new Gson().toJson(response.getRecord()).getBytes();
+        }
+        rabbitMQProducer.publish(properties, body);
     }
 
     private PurchaseResponse _doCmd(AMQP.BasicProperties properties, byte[] body) throws RabbitMQException {

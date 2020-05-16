@@ -1,11 +1,14 @@
 package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
+import cj.netos.ec.wybank.bo.ExchangeResponse;
 import cj.netos.ec.wybank.bo.ExchangeWenyBO;
+import cj.netos.ec.wybank.bo.PurchaseResponse;
 import cj.netos.ec.wybank.bo.PurchaseWenyBO;
 import cj.netos.ec.wybank.model.ExchangeRecord;
 import cj.netos.ec.wybank.model.PurchaseRecord;
 import cj.netos.rabbitmq.CjConsumer;
+import cj.netos.rabbitmq.IRabbitMQProducer;
 import cj.netos.rabbitmq.RabbitMQException;
 import cj.netos.rabbitmq.RetryCommandException;
 import cj.netos.rabbitmq.consumer.IConsumerCommand;
@@ -13,6 +16,7 @@ import cj.studio.ecm.IServiceSite;
 import cj.studio.ecm.annotation.CjService;
 import cj.studio.ecm.annotation.CjServiceRef;
 import cj.studio.ecm.annotation.CjServiceSite;
+import cj.studio.ecm.net.CircuitException;
 import cj.studio.openport.util.Encript;
 import cj.ultimate.gson2.com.google.gson.Gson;
 import com.rabbitmq.client.AMQP;
@@ -40,6 +44,12 @@ public class ExchangeWenyCommand implements IConsumerCommand {
     @CjServiceRef
     ICuratorPathChecker curatorPathChecker;
 
+    @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
+    IRabbitMQProducer rabbitMQProducer;
+
+    @CjServiceRef(refByName = "@.rabbitmq.producer.report")
+    IRabbitMQProducer reportRabbitMQProducer;
+
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
@@ -49,15 +59,40 @@ public class ExchangeWenyCommand implements IConsumerCommand {
         } catch (Exception e) {
             throw new RabbitMQException("500", e);
         }
+        LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
         InterProcessReadWriteLock lock = new InterProcessReadWriteLock(framework, path);
         InterProcessMutex mutex = lock.writeLock();
         try {
             mutex.acquire();
             _doCmd(properties, body);
-            //发送消息到交易网关，标记申购单状态为：已承兑
+            ExchangeResponse response = _doCmd(properties, body);
+            response.setMessage("ok");
+            response.setStatus("200");
+            response.setRecordSN(record_snLS.toString());
+            //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
+            _sendAck(response);
+            _report(response);
         } catch (RabbitMQException e) {
+            ExchangeResponse response = new ExchangeResponse();
+            response.setStatus("500");
+            response.setMessage(e.getMessage());
+            response.setRecordSN(record_snLS.toString());
+            try {
+                _sendAck(response);
+            } catch (CircuitException ex) {
+                throw new RabbitMQException(ex.getStatus(), ex.getMessage());
+            }
             throw e;
         } catch (Exception e) {
+            ExchangeResponse response = new ExchangeResponse();
+            response.setStatus("500");
+            response.setMessage(e.getMessage());
+            response.setRecordSN(record_snLS.toString());
+            try {
+                _sendAck(response);
+            } catch (CircuitException ex) {
+                throw new RabbitMQException(ex.getStatus(), ex.getMessage());
+            }
             throw new RabbitMQException("500", e);
         } finally {
             try {
@@ -68,7 +103,53 @@ public class ExchangeWenyCommand implements IConsumerCommand {
         }
     }
 
-    private void _doCmd(AMQP.BasicProperties properties, byte[] body) throws RabbitMQException {
+    private void _report(ExchangeResponse response) throws CircuitException {
+        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
+                .type("/report.ports")
+                .headers(new HashMap() {
+                    {
+                        put("state", response.getStatus());
+                        put("message", response.getMessage());
+                        put("command", "exchange");
+                        put("purchaser", response.getExchanger());
+                        put("purchaserName", response.getExchangerName());
+                        put("wenyBankID", response.getWenyBankID());
+                        put("record_sn", response.getRecordSN());
+                    }
+                }).build();
+        byte[] body = null;
+        if (!"200".equals(response.getStatus())) {
+            body = new byte[0];
+        } else {
+            body = new Gson().toJson(response.getRecord()).getBytes();
+        }
+        reportRabbitMQProducer.publish(properties, body);
+    }
+
+    private void _sendAck(ExchangeResponse response) throws CircuitException {
+        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
+                .type("/wybank.ports")
+                .headers(new HashMap() {
+                    {
+                        put("state", response.getStatus());
+                        put("message", response.getMessage());
+                        put("command", "ackExchange");
+                        put("purchaser", response.getExchanger());
+                        put("purchaserName", response.getExchangerName());
+                        put("wenyBankID", response.getWenyBankID());
+                        put("record_sn", response.getRecordSN());
+                    }
+                }).build();
+        byte[] body = null;
+        if (!"200".equals(response.getStatus())) {
+            body = new byte[0];
+        } else {
+            body = new Gson().toJson(response.getRecord()).getBytes();
+        }
+        rabbitMQProducer.publish(properties, body);
+    }
+
+    private ExchangeResponse _doCmd(AMQP.BasicProperties properties, byte[] body) throws RabbitMQException {
         OkHttpClient client = (OkHttpClient) site.getService("@.http");
 
         String appid = site.getProperty("appid");
@@ -122,6 +203,6 @@ public class ExchangeWenyCommand implements IConsumerCommand {
             throw new RabbitMQException(map.get("status") + "", map.get("message") + "");
         }
         json = (String) map.get("dataText");
-        map = new Gson().fromJson(json, HashMap.class);
+        return new Gson().fromJson(json, ExchangeResponse.class);
     }
 }
