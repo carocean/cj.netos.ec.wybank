@@ -3,10 +3,7 @@ package cj.netos.ec.wybank.cmd;
 import cj.netos.ec.wybank.ICuratorPathChecker;
 import cj.netos.ec.wybank.bo.ExchangeResponse;
 import cj.netos.ec.wybank.bo.ExchangeWenyBO;
-import cj.netos.ec.wybank.bo.PurchaseResponse;
-import cj.netos.ec.wybank.bo.PurchaseWenyBO;
 import cj.netos.ec.wybank.model.ExchangeRecord;
-import cj.netos.ec.wybank.model.PurchaseRecord;
 import cj.netos.rabbitmq.CjConsumer;
 import cj.netos.rabbitmq.IRabbitMQProducer;
 import cj.netos.rabbitmq.RabbitMQException;
@@ -45,7 +42,7 @@ public class ExchangeWenyCommand implements IConsumerCommand {
     ICuratorPathChecker curatorPathChecker;
 
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
-    IRabbitMQProducer rabbitMQProducer;
+    IRabbitMQProducer ackRabbitMQProducer;
 
     @CjServiceRef(refByName = "@.rabbitmq.producer.report")
     IRabbitMQProducer reportRabbitMQProducer;
@@ -64,7 +61,6 @@ public class ExchangeWenyCommand implements IConsumerCommand {
         InterProcessMutex mutex = lock.writeLock();
         try {
             mutex.acquire();
-            _doCmd(properties, body);
             ExchangeResponse response = _doCmd(properties, body);
             response.setMessage("ok");
             response.setStatus("200");
@@ -146,7 +142,7 @@ public class ExchangeWenyCommand implements IConsumerCommand {
         } else {
             body = new Gson().toJson(response.getRecord()).getBytes();
         }
-        rabbitMQProducer.publish(properties, body);
+        ackRabbitMQProducer.publish(properties, body);
     }
 
     private ExchangeResponse _doCmd(AMQP.BasicProperties properties, byte[] body) throws RabbitMQException {
