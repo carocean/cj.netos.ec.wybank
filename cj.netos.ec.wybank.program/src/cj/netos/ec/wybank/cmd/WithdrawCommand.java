@@ -44,8 +44,6 @@ public class WithdrawCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
-    @CjServiceRef(refByName = "@.rabbitmq.producer.report")
-    IRabbitMQProducer reportRabbitMQProducer;
 
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
@@ -67,7 +65,6 @@ public class WithdrawCommand implements IConsumerCommand {
             response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
-            _report(response);
         } catch (RabbitMQException e) {
             WithdrawResponse response = new WithdrawResponse();
             response.setStatus("500");
@@ -99,28 +96,6 @@ public class WithdrawCommand implements IConsumerCommand {
         }
     }
 
-    private void _report(WithdrawResponse response) throws CircuitException {
-        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
-                .type("/report.ports")
-                .headers(new HashMap() {
-                    {
-                        put("state", response.getStatus());
-                        put("message", response.getMessage());
-                        put("command", "withdraw");
-                        put("withdrawer", response.getWithdrawer());
-                        put("withdrawerName", response.getWithdrawerName());
-                        put("wenyBankID", response.getWenyBankID());
-                        put("record_sn", response.getRecordSN());
-                    }
-                }).build();
-        byte[] body = null;
-        if (!"200".equals(response.getStatus())) {
-            body = new byte[0];
-        } else {
-            body = new Gson().toJson(response.getRecord()).getBytes();
-        }
-        reportRabbitMQProducer.publish(properties, body);
-    }
 
     private void _sendAck(WithdrawResponse response) throws CircuitException {
         AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
@@ -151,7 +126,7 @@ public class WithdrawCommand implements IConsumerCommand {
         String appid = site.getProperty("appid");
         String appKey = site.getProperty("appKey");
         String appSecret = site.getProperty("appSecret");
-        String portsurl = site.getProperty("ports.oc.shunter");
+        String portsurl = site.getProperty("ports.oc.shunter.trade");
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
         LongString withdrawerLS = (LongString) properties.getHeaders().get("withdrawer");
         LongString withdrawerNameLS = (LongString) properties.getHeaders().get("withdrawerName");

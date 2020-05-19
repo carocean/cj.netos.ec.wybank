@@ -1,7 +1,10 @@
 package cj.netos.ec.wybank.bo;
 
 
+import cj.netos.ec.wybank.model.ShuntDetails;
 import cj.netos.ec.wybank.model.ShuntRecord;
+
+import java.util.List;
 
 public class ShuntResponse {
     String operator;
@@ -11,7 +14,7 @@ public class ShuntResponse {
     String message;
     String record_sn;
     ShuntRecord record;
-
+    List<ShuntDetails> details;
     public String getRecord_sn() {
         return record_sn;
     }
@@ -66,5 +69,13 @@ public class ShuntResponse {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public List<ShuntDetails> getDetails() {
+        return details;
+    }
+
+    public void setDetails(List<ShuntDetails> details) {
+        this.details = details;
     }
 }

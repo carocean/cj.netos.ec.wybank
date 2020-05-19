@@ -44,9 +44,6 @@ public class ExchangeWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer ackRabbitMQProducer;
 
-    @CjServiceRef(refByName = "@.rabbitmq.producer.report")
-    IRabbitMQProducer reportRabbitMQProducer;
-
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
@@ -67,7 +64,6 @@ public class ExchangeWenyCommand implements IConsumerCommand {
             response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
-            _report(response);
         } catch (RabbitMQException e) {
             ExchangeResponse response = new ExchangeResponse();
             response.setStatus("500");
@@ -99,28 +95,6 @@ public class ExchangeWenyCommand implements IConsumerCommand {
         }
     }
 
-    private void _report(ExchangeResponse response) throws CircuitException {
-        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
-                .type("/report.ports")
-                .headers(new HashMap() {
-                    {
-                        put("state", response.getStatus());
-                        put("message", response.getMessage());
-                        put("command", "exchange");
-                        put("purchaser", response.getExchanger());
-                        put("purchaserName", response.getExchangerName());
-                        put("wenyBankID", response.getWenyBankID());
-                        put("record_sn", response.getRecordSN());
-                    }
-                }).build();
-        byte[] body = null;
-        if (!"200".equals(response.getStatus())) {
-            body = new byte[0];
-        } else {
-            body = new Gson().toJson(response.getRecord()).getBytes();
-        }
-        reportRabbitMQProducer.publish(properties, body);
-    }
 
     private void _sendAck(ExchangeResponse response) throws CircuitException {
         AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()

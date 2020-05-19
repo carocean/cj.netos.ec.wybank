@@ -44,8 +44,6 @@ public class PurchaseWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
-    @CjServiceRef(refByName = "@.rabbitmq.producer.report")
-    IRabbitMQProducer reportRabbitMQProducer;
 
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
@@ -67,7 +65,6 @@ public class PurchaseWenyCommand implements IConsumerCommand {
             response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
-            _report(response);
         } catch (RabbitMQException e) {
             PurchaseResponse response = new PurchaseResponse();
             response.setState("500");
@@ -99,28 +96,6 @@ public class PurchaseWenyCommand implements IConsumerCommand {
         }
     }
 
-    private void _report(PurchaseResponse response) throws CircuitException {
-        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
-                .type("/report.ports")
-                .headers(new HashMap() {
-                    {
-                        put("state", response.getState());
-                        put("message", response.getMessage());
-                        put("command", "purchase");
-                        put("purchaser", response.getPurchaser());
-                        put("purchaserName", response.getPurchaserName());
-                        put("wenyBankID", response.getWenyBankID());
-                        put("record_sn", response.getRecordSN());
-                    }
-                }).build();
-        byte[] body = null;
-        if (!"200".equals(response.getState())) {
-            body = new byte[0];
-        } else {
-            body = new Gson().toJson(response.getRecord()).getBytes();
-        }
-        reportRabbitMQProducer.publish(properties, body);
-    }
 
     private void _sendAck(PurchaseResponse response) throws CircuitException {
         AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()

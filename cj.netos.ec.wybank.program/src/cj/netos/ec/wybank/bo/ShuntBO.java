@@ -40,4 +40,5 @@ public class ShuntBO {
     public void setRecord(ShuntRecord record) {
         this.record = record;
     }
+
 }

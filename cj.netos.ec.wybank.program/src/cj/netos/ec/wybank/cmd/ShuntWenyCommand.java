@@ -44,8 +44,6 @@ public class ShuntWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
-    @CjServiceRef(refByName = "@.rabbitmq.producer.report")
-    IRabbitMQProducer reportRabbitMQProducer;
 
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
@@ -68,7 +66,6 @@ public class ShuntWenyCommand implements IConsumerCommand {
             response.setRecord_sn(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
-            _report(response);
         } catch (RabbitMQException e) {
             ShuntResponse response = new ShuntResponse();
             response.setStatus("500");
@@ -100,28 +97,6 @@ public class ShuntWenyCommand implements IConsumerCommand {
         }
     }
 
-    private void _report(ShuntResponse response) throws CircuitException {
-        AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
-                .type("/report.ports")
-                .headers(new HashMap() {
-                    {
-                        put("state", response.getStatus());
-                        put("message", response.getMessage());
-                        put("command", "shunt");
-                        put("operator", response.getOperator());
-                        put("operatorName", response.getOperatorName());
-                        put("wenyBankID", response.getWenyBankID());
-                        put("record_sn", response.getRecord_sn());
-                    }
-                }).build();
-        byte[] body = null;
-        if (!"200".equals(response.getStatus())) {
-            body = new byte[0];
-        } else {
-            body = new Gson().toJson(response.getRecord()).getBytes();
-        }
-        reportRabbitMQProducer.publish(properties, body);
-    }
 
     private void _sendAck(ShuntResponse response) throws CircuitException {
         AMQP.BasicProperties properties = new AMQP.BasicProperties().builder()
@@ -141,7 +116,7 @@ public class ShuntWenyCommand implements IConsumerCommand {
         if (!"200".equals(response.getStatus())) {
             body = new byte[0];
         } else {
-            body = new Gson().toJson(response.getRecord()).getBytes();
+            body = new Gson().toJson(response).getBytes();
         }
         rabbitMQProducer.publish(properties, body);
     }
@@ -210,7 +185,7 @@ public class ShuntWenyCommand implements IConsumerCommand {
         String appid = site.getProperty("appid");
         String appKey = site.getProperty("appKey");
         String appSecret = site.getProperty("appSecret");
-        String portsurl = site.getProperty("ports.oc.shunter");
+        String portsurl = site.getProperty("ports.oc.shunter.trade");
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
         LongString operatorLS = (LongString) properties.getHeaders().get("operator");
         LongString operatorNameLS = (LongString) properties.getHeaders().get("operatorName");
