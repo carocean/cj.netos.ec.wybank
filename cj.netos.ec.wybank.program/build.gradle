@@ -25,6 +25,7 @@ dependencies {
     compile group: 'com.rabbitmq', name: 'amqp-client', version: '5.9.0'
 
     compile group: 'cj.netos.rabbitmq', name: 'cj.netos.rabbitmq', version: ref_cj_netos_rabbitmq_version
+    compile group: 'org.yaml', name: 'snakeyaml', version: '1.25'
 
     compile group: 'org.apache.curator', name: 'curator-framework', version: '4.3.0'
     compile group: 'org.apache.curator', name: 'curator-recipes', version: '4.3.0'
@@ -38,7 +39,8 @@ task copyRefembeds(type: Copy) {
 task copyReferences(type: Copy) {
     from configurations.compileClasspath.files {
         include 'cj.netos.gateway.wybank.openports-*.jar',  'cj.studio.openport-*.jar','okhttp-*.jar','amqp-client-*.jar','cj.netos.rabbitmq-*.jar','curator-*.jar',
-                'zookeeper-*.jar','jsr305-.*.jar','error_prone_*.jar','failureaccess-*.jar','guava-*.jar','listenablefuture*.jar','j2objc-*.jar'
+                'zookeeper-*.jar','jsr305-.*.jar','error_prone_*.jar','failureaccess-*.jar','guava-*.jar','listenablefuture*.jar','j2objc-*.jar',
+                'snakeyaml-*.jar'
     }
     into 'src/cj/references'
 }
