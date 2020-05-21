@@ -1,6 +1,7 @@
 package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
+import cj.netos.ec.wybank.ITradeEventNotify;
 import cj.netos.ec.wybank.bo.WithdrawBO;
 import cj.netos.ec.wybank.bo.WithdrawResponse;
 import cj.netos.ec.wybank.model.WithdrawRecord;
@@ -44,6 +45,8 @@ public class WithdrawCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
+    @CjServiceRef
+    ITradeEventNotify tradeEventNotify;
 
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
@@ -55,6 +58,7 @@ public class WithdrawCommand implements IConsumerCommand {
             throw new RabbitMQException("500", e);
         }
         LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
+        LongString withdrawerLS = (LongString) properties.getHeaders().get("withdrawer");
         InterProcessReadWriteLock lock = new InterProcessReadWriteLock(framework, path);
         InterProcessMutex mutex = lock.writeLock();
         try {
@@ -65,6 +69,7 @@ public class WithdrawCommand implements IConsumerCommand {
             response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
+            tradeEventNotify.onsuccess("withdraw", response, withdrawerLS == null ? "" : withdrawerLS.toString());
         } catch (RabbitMQException e) {
             WithdrawResponse response = new WithdrawResponse();
             response.setStatus("500");
@@ -75,6 +80,7 @@ public class WithdrawCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("withdraw", response, withdrawerLS == null ? "" : withdrawerLS.toString());
             throw e;
         } catch (Exception e) {
             WithdrawResponse response = new WithdrawResponse();
@@ -86,6 +92,7 @@ public class WithdrawCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("withdraw", response, withdrawerLS == null ? "" : withdrawerLS.toString());
             throw new RabbitMQException("500", e);
         } finally {
             try {

@@ -1,6 +1,7 @@
 package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
+import cj.netos.ec.wybank.ITradeEventNotify;
 import cj.netos.ec.wybank.bo.ShuntBO;
 import cj.netos.ec.wybank.bo.ShuntResponse;
 import cj.netos.ec.wybank.model.ShuntRecord;
@@ -44,7 +45,8 @@ public class ShuntWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
-
+    @CjServiceRef
+    ITradeEventNotify tradeEventNotify;
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
@@ -55,6 +57,7 @@ public class ShuntWenyCommand implements IConsumerCommand {
             throw new RabbitMQException("500", e);
         }
         LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
+        LongString operatorLS = (LongString) properties.getHeaders().get("operator");
         InterProcessReadWriteLock lock = new InterProcessReadWriteLock(framework, path);
         InterProcessMutex mutex = lock.writeLock();
         try {
@@ -66,6 +69,7 @@ public class ShuntWenyCommand implements IConsumerCommand {
             response.setRecord_sn(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
+            tradeEventNotify.onsuccess("shunt", response, operatorLS==null?"":operatorLS.toString());
         } catch (RabbitMQException e) {
             ShuntResponse response = new ShuntResponse();
             response.setStatus("500");
@@ -76,6 +80,7 @@ public class ShuntWenyCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("shunt", response, operatorLS==null?"":operatorLS.toString());
             throw e;
         } catch (Exception e) {
             ShuntResponse response = new ShuntResponse();
@@ -87,6 +92,7 @@ public class ShuntWenyCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("shunt", response, operatorLS==null?"":operatorLS.toString());
             throw new RabbitMQException("500", e);
         } finally {
             try {

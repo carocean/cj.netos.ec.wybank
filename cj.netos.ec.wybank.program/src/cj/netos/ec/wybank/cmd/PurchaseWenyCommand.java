@@ -1,6 +1,7 @@
 package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
+import cj.netos.ec.wybank.ITradeEventNotify;
 import cj.netos.ec.wybank.bo.PurchaseResponse;
 import cj.netos.ec.wybank.bo.PurchaseWenyBO;
 import cj.netos.ec.wybank.model.PurchaseRecord;
@@ -44,6 +45,8 @@ public class PurchaseWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer rabbitMQProducer;
 
+    @CjServiceRef
+    ITradeEventNotify tradeEventNotify;
 
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
@@ -55,6 +58,7 @@ public class PurchaseWenyCommand implements IConsumerCommand {
             throw new RabbitMQException("500", e);
         }
         LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
+        LongString purchaserLS = (LongString) properties.getHeaders().get("purchaser");
         InterProcessReadWriteLock lock = new InterProcessReadWriteLock(framework, path);
         InterProcessMutex mutex = lock.writeLock();
         try {
@@ -65,6 +69,7 @@ public class PurchaseWenyCommand implements IConsumerCommand {
             response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
+            tradeEventNotify.onsuccess("purchase", response, purchaserLS == null ? "" : purchaserLS.toString());
         } catch (RabbitMQException e) {
             PurchaseResponse response = new PurchaseResponse();
             response.setState("500");
@@ -75,6 +80,7 @@ public class PurchaseWenyCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("purchase", response, purchaserLS == null ? "" : purchaserLS.toString());
             throw e;
         } catch (Exception e) {
             PurchaseResponse response = new PurchaseResponse();
@@ -86,6 +92,7 @@ public class PurchaseWenyCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("purchase", response, purchaserLS == null ? "" : purchaserLS.toString());
             throw new RabbitMQException("500", e);
         } finally {
             try {

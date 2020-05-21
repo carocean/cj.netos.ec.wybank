@@ -1,6 +1,7 @@
 package cj.netos.ec.wybank.cmd;
 
 import cj.netos.ec.wybank.ICuratorPathChecker;
+import cj.netos.ec.wybank.ITradeEventNotify;
 import cj.netos.ec.wybank.bo.ExchangeResponse;
 import cj.netos.ec.wybank.bo.ExchangeWenyBO;
 import cj.netos.ec.wybank.model.ExchangeRecord;
@@ -44,6 +45,9 @@ public class ExchangeWenyCommand implements IConsumerCommand {
     @CjServiceRef(refByName = "@.rabbitmq.producer.ack")
     IRabbitMQProducer ackRabbitMQProducer;
 
+    @CjServiceRef
+    ITradeEventNotify tradeEventNotify;
+
     @Override
     public void command(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws RabbitMQException, RetryCommandException {
         LongString wenyBankIDLS = (LongString) properties.getHeaders().get("wenyBankID");
@@ -54,6 +58,7 @@ public class ExchangeWenyCommand implements IConsumerCommand {
             throw new RabbitMQException("500", e);
         }
         LongString record_snLS = (LongString) properties.getHeaders().get("record_sn");
+        LongString exchangerLS = (LongString) properties.getHeaders().get("exchanger");
         InterProcessReadWriteLock lock = new InterProcessReadWriteLock(framework, path);
         InterProcessMutex mutex = lock.writeLock();
         try {
@@ -64,6 +69,7 @@ public class ExchangeWenyCommand implements IConsumerCommand {
             response.setRecordSN(record_snLS.toString());
             //发送消息到交易网关，标记申购状态为：已申购，如果出错，标记为错误状态，交记录错误信息
             _sendAck(response);
+            tradeEventNotify.onsuccess("exchange", response, exchangerLS == null ? "" : exchangerLS.toString());
         } catch (RabbitMQException e) {
             ExchangeResponse response = new ExchangeResponse();
             response.setStatus("500");
@@ -74,6 +80,7 @@ public class ExchangeWenyCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("exchange", response, exchangerLS == null ? "" : exchangerLS.toString());
             throw e;
         } catch (Exception e) {
             ExchangeResponse response = new ExchangeResponse();
@@ -85,6 +92,7 @@ public class ExchangeWenyCommand implements IConsumerCommand {
             } catch (CircuitException ex) {
                 throw new RabbitMQException(ex.getStatus(), ex.getMessage());
             }
+            tradeEventNotify.onerror("exchange", response, exchangerLS == null ? "" : exchangerLS.toString());
             throw new RabbitMQException("500", e);
         } finally {
             try {
